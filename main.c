@@ -71,11 +71,50 @@ void SpawnLinear(List *enemies, size_t count, Player player);
 void DrawEnemies(List *enemies);
 
 void LinearAttack(List *attacks, Enemy enemy);
-void UpdateAttacks(List *attacks);
+void UpdateAttacks(List *attacks, float *shakeTimer, float *shakeIntensity);
+void DrawAttacks(const List *attacks);
+
+void UpdateScreenShake(
+    Camera2D *camera,
+    float *shakeTimer,
+    float *shakeIntensity
+);
 
 int main(void) {
     InitWindow(WIDTH, HEIGHT, "X-am");
     SetTargetFPS(60);
+
+    Camera2D camera = {
+        .offset = {
+            WIDTH / 2.0f,
+            HEIGHT / 2.0f
+        },
+        .target = {
+            WIDTH / 2.0f,
+            HEIGHT / 2.0f
+        },
+        .rotation = 0.0f,
+        .zoom = 1.0f
+    };
+
+    RenderTexture2D target = LoadRenderTexture(WIDTH, HEIGHT);
+
+    Shader shader = LoadShader(0, "crt_bloom.fs");
+
+    int resolutionLoc = GetShaderLocation(shader, "resolution");
+    int timeLoc = GetShaderLocation(shader, "time");
+
+    Vector2 resolution = {
+        (float)WIDTH,
+        (float)HEIGHT
+    };
+
+    SetShaderValue(
+        shader,
+        resolutionLoc,
+        &resolution,
+        SHADER_UNIFORM_VEC2
+    );
 
     Player player = {
         .health = 100,
@@ -94,11 +133,16 @@ int main(void) {
 
     SpawnLinear(&enemies, 5, player);
 
+    // Screen shake
+    float shakeTimer = 0.0f;
+    float shakeIntensity = 0.0f;
+
     while (!WindowShouldClose()) {
         MovePlayer(&player);
 
         if (IsKeyPressed(KEY_SPACE))
             Shoot(player, &bullets, 5);
+
         UpdateBullets(&bullets);
 
         if (IsKeyPressed(KEY_O)) {
@@ -108,29 +152,74 @@ int main(void) {
             }
         }
 
+        UpdateAttacks(&attacks, &shakeTimer, &shakeIntensity);
+        UpdateScreenShake(&camera, &shakeTimer, &shakeIntensity);
+
         // Rendering
-        BeginDrawing();
+        BeginTextureMode(target);
         ClearBackground(BLACK);
+
+        BeginMode2D(camera);
+
         // Player
         DrawCircleLinesV(
             player.pos,
             player.radius,
             player.color
         );
+
         DrawCircleV(
             player.pos,
             player.radius - (float)player.radius / 3.5f,
             player.color
         );
+
         // Bullets
         DrawBullets(&bullets);
         // Enemies
         DrawEnemies(&enemies);
         // Attacks
-        UpdateAttacks(&attacks);
+        DrawAttacks(&attacks);
+
+        EndMode2D();
+
+        EndTextureMode();
+
+        // Update shader time
+        float time = (float)GetTime();
+
+        SetShaderValue(
+            shader,
+            timeLoc,
+            &time,
+            SHADER_UNIFORM_FLOAT
+        );
+
+        // Draw the rendered game through the CRT/bloom shader
+        BeginDrawing();
+        ClearBackground(BLACK);
+
+        BeginShaderMode(shader);
+
+        DrawTextureRec(
+            target.texture,
+            (Rectangle){
+                0.0f,
+                0.0f,
+                (float)WIDTH,
+                -(float)HEIGHT
+            },
+            (Vector2){ 0.0f, 0.0f },
+            WHITE
+        );
+
+        EndShaderMode();
 
         EndDrawing();
     }
+
+    UnloadShader(shader);
+    UnloadRenderTexture(target);
 
     CloseWindow();
 
@@ -180,8 +269,12 @@ void Shoot(Player p, List *bullets, size_t count) {
     }
 }
 
-void UpdateBullets(List *bullets) { for (size_t i = 0; i < bullets->count; i++) { Bullet *bullet = list_get(Bullet, bullets, i);
+void UpdateBullets(List *bullets) {
+    for (size_t i = 0; i < bullets->count; i++) {
+        Bullet *bullet = list_get(Bullet, bullets, i);
+
         float angle = bullet->rotation * DEG2RAD;
+
         Vector2 forward = {
             cosf(angle),
             sinf(angle)
@@ -189,6 +282,9 @@ void UpdateBullets(List *bullets) { for (size_t i = 0; i < bullets->count; i++) 
 
         bullet->pos.x += forward.x * bullet->speed;
         bullet->pos.y += forward.y * bullet->speed;
+
+        if (bullet->duration > 0)
+            bullet->duration--;
     }
 }
 
@@ -197,8 +293,11 @@ void DrawBullets(const List *bullets) {
         Bullet *bullet = list_get(Bullet, bullets, i);
 
         if (bullet->duration > 0) {
-            DrawCircleLinesV(bullet->pos, bullet->radius, bullet->color);
-            bullet->duration--;
+            DrawCircleLinesV(
+                bullet->pos,
+                bullet->radius,
+                bullet->color
+            );
         }
     }
 }
@@ -244,7 +343,11 @@ void DrawEnemies(List *enemies) {
     for (size_t i = 0; i < enemies->count; i++) {
         Enemy *enemy = list_get(Enemy, enemies, i);
 
-        DrawRectangleLinesEx(enemy->rect, ENEMY_THICKNESS, enemy->color);
+        DrawRectangleLinesEx(
+            enemy->rect,
+            ENEMY_THICKNESS,
+            enemy->color
+        );
     }
 }
 
@@ -268,8 +371,14 @@ void LinearAttack(List *attacks, Enemy enemy) {
         .damage = 30,
         .cooldown = 1.5f,        // 1.5 seconds warning line indicator
         .active_timer = 0.4f,    // 0.4 seconds flash duration when firing
-        .start = Vector2Subtract(center, Vector2Scale(direction, length)),
-        .end = Vector2Add(center, Vector2Scale(direction, length)),
+        .start = Vector2Subtract(
+            center,
+            Vector2Scale(direction, length)
+        ),
+        .end = Vector2Add(
+            center,
+            Vector2Scale(direction, length)
+        ),
         .thickness = ATTACK_THICKNESS,
         .color = RED,
         .active = false
@@ -278,30 +387,95 @@ void LinearAttack(List *attacks, Enemy enemy) {
     list_push(attacks, attack);
 }
 
-void UpdateAttacks(List *attacks) {
+void UpdateAttacks(List *attacks, float *shakeTimer, float *shakeIntensity) {
     for (int i = (int)attacks->count - 1; i >= 0; i--) {
         Attack *attack = list_get(Attack, attacks, i);
 
         // Charge up attack
         if (attack->cooldown > 0.0f) {
             attack->cooldown -= GetFrameTime();
-            
-            // Warning line that gets narrower
-            DrawLineEx(attack->start, attack->end, attack->thickness*attack->cooldown*4, ColorAlpha(attack->color, 0.5f));
-        } 
+
+            if (attack->cooldown < 0.0f)
+                attack->cooldown = 0.0f;
+        }
 
         // Attack active
         else {
-            attack->active = true;
-            attack->active_timer -= GetFrameTime();
+            if (!attack->active) {
+                attack->active = true;
 
-            // Draw full thickness
-            DrawLineEx(attack->start, attack->end, attack->thickness, WHITE);
+                // Screen shake
+                *shakeTimer = 0.15f;
+                *shakeIntensity = 10.0f;
+            }
+
+            attack->active_timer -= GetFrameTime();
 
             // Delete attack
             if (attack->active_timer <= 0.0f) {
                 list_remove(attacks, i);
             }
         }
+    }
+}
+
+void DrawAttacks(const List *attacks) {
+    for (size_t i = 0; i < attacks->count; i++) {
+        Attack *attack = list_get(Attack, attacks, i);
+
+        // Charge up attack
+        if (attack->cooldown > 0.0f) {
+            float thickness =
+                attack->thickness *
+                attack->cooldown *
+                4.0f;
+
+            DrawLineEx(
+                attack->start,
+                attack->end,
+                thickness,
+                ColorAlpha(attack->color, 0.5f)
+            );
+        }
+
+        // Attack active
+        else {
+            // Draw full thickness
+            DrawLineEx(
+                attack->start,
+                attack->end,
+                attack->thickness,
+                WHITE
+            );
+        }
+    }
+}
+
+void UpdateScreenShake(Camera2D *camera, float *shakeTimer, float *shakeIntensity) {
+    if (*shakeTimer > 0.0f) {
+        *shakeTimer -= GetFrameTime();
+
+        camera->offset.x =
+            WIDTH / 2.0f +
+            (float)GetRandomValue(
+                -(int)(*shakeIntensity * 100.0f),
+                (int)(*shakeIntensity * 100.0f)
+            ) / 100.0f;
+
+        camera->offset.y =
+            HEIGHT / 2.0f +
+            (float)GetRandomValue(
+                -(int)(*shakeIntensity * 100.0f),
+                (int)(*shakeIntensity * 100.0f)
+            ) / 100.0f;
+
+        // Gradually reduce shake intensity
+        *shakeIntensity *= 0.90f;
+    }
+    else {
+        camera->offset.x = WIDTH / 2.0f;
+        camera->offset.y = HEIGHT / 2.0f;
+
+        *shakeIntensity = 0.0f;
     }
 }
