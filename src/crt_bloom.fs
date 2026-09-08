@@ -8,6 +8,7 @@ out vec4 finalColor;
 uniform sampler2D texture0;
 uniform vec2 resolution;
 uniform float time;
+uniform float hitTimer;
 
 vec3 SampleBloom(vec2 uv, vec2 texelSize)
 {
@@ -77,7 +78,7 @@ void main()
 
     color += noise;
 
-    // Vignette.
+    // Normal CRT vignette.
     float vignette =
         smoothstep(0.95, 0.30, distanceFromCenter);
 
@@ -99,6 +100,21 @@ void main()
     ).b;
 
     color = vec3(red, green, blue);
+
+    // Hit vignette.
+    // Make the effect fade smoothly instead of linearly.
+    float hitStrength = smoothstep(0.0, 1.0, hitTimer);
+
+    // Distance from the center of the screen.
+    float hitDistance = length(center);
+
+    // Start the darkness much closer to the center than
+    // the normal CRT vignette.
+    float hitVignette =
+        smoothstep(0.15, 0.65, hitDistance);
+
+    // Make the edges become extremely dark when hit.
+    color *= 1.0 - hitVignette * hitStrength * 0.95;
 
     finalColor = vec4(color, 1.0);
 }
