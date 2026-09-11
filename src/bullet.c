@@ -31,6 +31,7 @@ void Shoot(Player p, List *bullets, size_t count) {
     }
 }
 
+
 void UpdateBullets(List *bullets) {
     float dt = GetFrameTime();
 

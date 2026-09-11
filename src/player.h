@@ -7,10 +7,14 @@
 typedef struct {
     float health;
     size_t speed;
-    size_t radius;
+    
     Vector2 pos;
     Vector2 velocity;
+
     float hurt_timer;
+
+    float rotation;
+    size_t radius;
     Color color;
 } Player;
 
@@ -23,5 +27,7 @@ void UpdatePlayer(
     float *shakeIntensity,
     float *hitTimer
 );
+
+void DrawPlayer(Player player);
 
 #endif

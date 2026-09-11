@@ -37,7 +37,6 @@ int main(void) {
     Player player = {
         .health = 100.0f,
         .speed = PLAYER_SPEED,
-        .radius = PLAYER_RADIUS,
         .pos = {
             WIDTH / 2.0f,
             HEIGHT / 2.0f
@@ -46,6 +45,8 @@ int main(void) {
             0.0f,
             0.0f
         },
+        .rotation = 0.0f,
+        .radius = PLAYER_RADIUS,
         .color = WHITE
     };
 
@@ -54,6 +55,7 @@ int main(void) {
     List attacks = list_new(Attack);
 
     SpawnLinear(&enemies, 5, player);
+    SpawnSine(&enemies, 5, player);
 
     float shakeTimer = 0.0f;
     float shakeIntensity = 0.0f;
@@ -61,12 +63,17 @@ int main(void) {
     float hitTimer = 0.0f;
 
     while (!WindowShouldClose()) {
-
         /*
          * Update
          */
 
         MovePlayer(&player);
+
+        Vector2 mouseWorld = GetScreenToWorld2D(GetMousePosition(), camera);
+        player.rotation = atan2f(
+            mouseWorld.y - player.pos.y,
+            mouseWorld.x - player.pos.x
+        );
 
         UpdatePlayer(
             &player,
@@ -95,10 +102,19 @@ int main(void) {
                 Enemy *enemy =
                     list_get(Enemy, &enemies, i);
 
-                LinearAttack(
-                    &attacks,
-                    *enemy
-                );
+                switch (enemy->type) {
+                    case LINEAR:
+                        LinearAttack(&attacks, *enemy);
+                        break;
+                    case SINE:
+                        if (GetRandomValue(0, 1) == 0) 
+                            SineAttack1(&attacks, player);
+                        else
+                            SineAttack2(&attacks);
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 
@@ -124,23 +140,9 @@ int main(void) {
 
         BeginMode2D(camera);
 
-        DrawCircleLinesV(
-            player.pos,
-            player.radius,
-            player.color
-        );
-
-        DrawCircleV(
-            player.pos,
-            player.radius -
-                (float)player.radius / 3.5f,
-            player.color
-        );
-
+        DrawPlayer(player);
         DrawBullets(&bullets);
-
-        DrawEnemies(&enemies);
-
+        DrawEnemies(&enemies, player);
         DrawAttacks(&attacks);
 
         DrawText(

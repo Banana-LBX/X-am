@@ -7,21 +7,30 @@
 
 typedef enum {
     LINEAR,
-} EnemyType;
+    SINE,
+} Type;
 
 typedef struct {
     float health;
     size_t speed;
     Rectangle rect;
-    EnemyType type;
+
+    Type type;
+
     float hurt_timer;
+
+    float rotation;
     Color color;
+    Vector2 eye_pos;
 } Enemy;
 
 void UpdateEnemies(List *enemies, List *bullets);
-void DrawEnemies(const List *enemies);
+void DrawEnemies(const List *enemies, Player p);
 
 Vector2 GetSpawnLocation(Player player);
 void SpawnLinear(List *enemies, size_t count, Player player);
+void SpawnSine(List *enemies, size_t count, Player player);
+
+Vector2 MoveEye(Vector2 currentPos, Vector2 targetPos, Vector2 anchorPos, float speed, float minDst, float maxDst);
 
 #endif

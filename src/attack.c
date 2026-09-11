@@ -1,4 +1,7 @@
 #include "attack.h"
+#include "cimp.h"
+#include "game.h"
+#include <raylib.h>
 
 void LinearAttack(List *attacks, Enemy enemy) {
     float angle = (float)GetRandomValue(0, 36000) / 100.0f;
@@ -9,31 +12,60 @@ void LinearAttack(List *attacks, Enemy enemy) {
         enemy.rect.y + enemy.rect.height / 2.0f
     };
 
-    Vector2 direction = {
-        cosf(angle),
-        sinf(angle)
-    };
-
-    float length = 3000.0f;
-
     Attack attack = {
         .damage = LINEAR_DAMAGE,
         .cooldown = LINEAR_COOLDOWN,
         .active_timer = LINEAR_ACTIVE,
-        .start = Vector2Subtract(
-            center,
-            Vector2Scale(direction, length)
-        ),
-        .end = Vector2Add(
-            center,
-            Vector2Scale(direction, length)
-        ),
+        .pos = center,
+        .rotation = angle,
         .thickness = ATTACK_THICKNESS,
-        .color = RED,
+        .color = LINEAR_COLOR,
         .active = false
     };
 
     list_push(attacks, attack);
+}
+
+void SineAttack1(List *attacks, Player p) {
+    Vector2 pos = p.pos;
+
+    for (size_t i = 0; i < 8; i++) {
+        Attack attack = {
+            .type = SINE,
+            .damage = SINE_DAMAGE/2,
+            .cooldown = SINE_COOLDOWN + i * 0.1f,
+            .active_timer = SINE_ACTIVE,
+            .pos = pos,
+            .rotation = 0.0f,
+            .radius = 10.0f + i * 20.0f,
+            .thickness = ATTACK_THICKNESS,
+            .color = SINE_COLOR,
+            .active = false
+        };
+
+        list_push(attacks, attack);
+    }
+}
+
+void SineAttack2(List *attacks) {
+    Vector2 pos = (Vector2){GetRandomValue(0, WIDTH), GetRandomValue(0, HEIGHT)};
+
+    for (size_t i = 0; i < 10; i++) {
+        Attack attack = {
+            .type = SINE,
+            .damage = SINE_DAMAGE,
+            .cooldown = SINE_COOLDOWN + 0.5f,
+            .active_timer = SINE_ACTIVE,
+            .pos = pos,
+            .rotation = 0.0f,
+            .radius = 80.0f,
+            .thickness = ATTACK_THICKNESS,
+            .color = PURPLE,
+            .active = false
+        };
+
+        list_push(attacks, attack);
+    }
 }
 
 void UpdateAttacks(List *attacks, float *shakeTimer, float *shakeIntensity) {
@@ -65,37 +97,61 @@ void UpdateAttacks(List *attacks, float *shakeTimer, float *shakeIntensity) {
                 list_remove(attacks, i);
             }
         }
-    }
+   }
 }
 
 void DrawAttacks(const List *attacks) {
     for (size_t i = 0; i < attacks->count; i++) {
         Attack *attack = list_get(Attack, attacks, i);
 
+        float thickness;
+        Color color;
+
         // Charge up attack
         if (attack->cooldown > 0.0f) {
-            float thickness =
-                attack->thickness *
-                attack->cooldown *
-                4.0f;
-
-            DrawLineEx(
-                attack->start,
-                attack->end,
-                thickness,
-                ColorAlpha(attack->color, 0.5f)
-            );
+            thickness = attack->thickness * attack->cooldown * 4.0f;
+            color = ColorAlpha(attack->color, 0.5f);
         }
-
         // Attack active
         else {
-            // Draw full thickness
-            DrawLineEx(
-                attack->start,
-                attack->end,
-                attack->thickness,
-                WHITE
-            );
+            // Full thickness
+            thickness = attack->thickness;
+            color = WHITE;
+        }
+
+        switch (attack->type) {
+            case LINEAR: ;
+                Vector2 direction = {
+                    cosf(attack->rotation),
+                    sinf(attack->rotation)
+                };
+
+                float length = 3000.0f;
+
+                DrawLineEx(
+                    Vector2Subtract(
+                        attack->pos,
+                        Vector2Scale(direction, length)
+                        ),
+                    Vector2Add(
+                        attack->pos,
+                        Vector2Scale(direction, length)
+                        ),
+                    thickness,
+                    color
+                );
+                break;
+            case SINE:
+                for (size_t i = 0; i < thickness; i++) {
+                    DrawCircleLinesV(
+                        attack->pos,
+                        attack->radius-i,
+                        color
+                    );
+                }
+                break;
+            default:
+                break;
         }
     }
 }

@@ -1,5 +1,6 @@
 #include "player.h"
 #include "attack.h"
+#include <raylib.h>
 
 void MovePlayer(Player *p) {
     Vector2 direction = { 0.0f, 0.0f };
@@ -94,27 +95,72 @@ void UpdatePlayer(
 
         if (
             p->hurt_timer <= 0.0f &&
-            attack->active &&
-            CheckCollisionCircleLine(
-                p->pos,
-                p->radius,
-                attack->start,
-                attack->end
-            )
+            attack->active
         ) {
-            p->health -= (float)attack->damage;
+            switch (attack->type) {
+                case LINEAR: {
+                    Vector2 direction = {
+                        cosf(attack->rotation),
+                        sinf(attack->rotation)
+                    };
 
-            // Give the player 0.2 seconds of invincibility
-            p->hurt_timer = INVINCI_TIME;
+                    float length = 3000.0f;
 
-            // Hit screen shake
-            *shakeTimer = 0.20f;
-            *shakeIntensity = 50.0f;
+                    Vector2 start = Vector2Subtract(
+                        attack->pos,
+                        Vector2Scale(direction, length)
+                    );
 
-            *hitTimer = 1.5f;
+                    Vector2 end = Vector2Add(
+                        attack->pos,
+                        Vector2Scale(direction, length)
+                    );
 
-            // Only allow one hit per frame
-            break;
+                    if (CheckCollisionCircleLine(
+                        p->pos,
+                        p->radius,
+                        start,
+                        end
+                    )) {
+                        p->health -= (float)attack->damage;
+
+                        p->hurt_timer = INVINCI_TIME;
+
+                        *shakeTimer = 0.20f;
+                        *shakeIntensity = 50.0f;
+
+                        *hitTimer = 1.5f;
+
+                        break;
+                    }
+
+                    break;
+                }
+
+                case SINE:
+                    if (CheckCollisionCircles(
+                        p->pos,
+                        p->radius,
+                        attack->pos,
+                        attack->radius
+                    )) {
+                        p->health -= (float)attack->damage;
+
+                        p->hurt_timer = INVINCI_TIME;
+
+                        *shakeTimer = 0.20f;
+                        *shakeIntensity = 50.0f;
+
+                        *hitTimer = 1.5f;
+
+                        break;
+                    }
+
+                    break;
+
+                default:
+                    break;
+            }
         }
     }
 
@@ -123,4 +169,26 @@ void UpdatePlayer(
         p->color = RED;
     else
         p->color = WHITE;
+}
+
+void DrawPlayer(Player player) {
+    float r = player.radius;
+    float rotation = player.rotation * RAD2DEG;
+
+    DrawPolyLinesEx(
+        player.pos,
+        3,
+        r,
+        rotation,
+        2.0f,
+        player.color
+    );
+
+    DrawPoly(
+        player.pos,
+        3,
+        r / 2.0f,
+        rotation,
+        player.color
+    );
 }
