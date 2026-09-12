@@ -8,6 +8,7 @@
 #include "bullet.h"
 #include "enemy.h"
 #include "attack.h"
+#include "projectile.h"
 #include "screen_shake.h"
 #include "shader.h"
 
@@ -50,7 +51,7 @@ int main(void) {
         .color = WHITE
     };
 
-    List bullets = list_new(Bullet);
+    List playerBullets = list_new(Bullet);
     List enemies = list_new(Enemy);
     List attacks = list_new(Attack);
 
@@ -67,6 +68,9 @@ int main(void) {
          * Update
          */
 
+        float dt = GetFrameTime();
+
+        // Player
         MovePlayer(&player);
 
         Vector2 mouseWorld = GetScreenToWorld2D(GetMousePosition(), camera);
@@ -77,7 +81,9 @@ int main(void) {
 
         UpdatePlayer(
             &player,
+            &enemies,
             &attacks,
+
             &shakeTimer,
             &shakeIntensity,
             &hitTimer
@@ -91,12 +97,14 @@ int main(void) {
         }
 
         if (IsKeyPressed(KEY_SPACE))
-            Shoot(player, &bullets, 5);
+            PlayerShoot(player, &playerBullets, 5);
 
-        UpdateBullets(&bullets);
+        UpdateBullets(&playerBullets);
 
-        UpdateEnemies(&enemies, &bullets);
+        // Enemies
+        CheckEnemiesCollision(&enemies, &playerBullets);
 
+        // Enemy attacks
         if (IsKeyPressed(KEY_O)) {
             for (size_t i = 0; i < enemies.count; i++) {
                 Enemy *enemy =
@@ -118,12 +126,122 @@ int main(void) {
             }
         }
 
+        // Enemy shooting
+        if (IsKeyPressed(KEY_P)) {
+            for (size_t i = 0; i < enemies.count; i++) {
+                Enemy *enemy =
+                    list_get(Enemy, &enemies, i);
+
+                if (enemy->type == LINEAR) {
+                    enemy->shots = enemy->max_shots;
+                    enemy->charge_timer = enemy->charge_duration;
+                    enemy->shoot_timer = 0.0f;
+                    enemy->shake_offset =
+                        (Vector2){0.0f, 0.0f};
+                }
+            }
+        }
+
+        for (size_t i = 0; i < enemies.count; i++) {
+            Enemy *enemy =
+                list_get(Enemy, &enemies, i);
+
+            if (enemy->type != LINEAR)
+                continue;
+
+            // Charging
+            if (enemy->charge_timer > 0.0f) {
+                enemy->charge_timer -= dt;
+
+                if (enemy->charge_timer < 0.0f)
+                    enemy->charge_timer = 0.0f;
+
+                ShakeEnemy(enemy);
+
+                continue;
+            }
+
+            // No more shaking, charged
+            enemy->shake_offset =
+                (Vector2){0.0f, 0.0f};
+
+            if (enemy->shots == 0)
+                continue;
+
+            // Wait between shots
+            if (enemy->shoot_timer > 0.0f) {
+                enemy->shoot_timer -= dt;
+
+                if (enemy->shoot_timer < 0.0f)
+                    enemy->shoot_timer = 0.0f;
+
+                continue;
+            }
+
+            // Shoot
+            LinearShoot(enemy, player);
+
+            enemy->shots--;
+
+            // Recoil
+            Vector2 direction = Vector2Normalize(
+                Vector2Subtract(
+                    (Vector2){
+                        enemy->rect.x,
+                        enemy->rect.y
+                    },
+                    player.pos
+                )
+            );
+
+            enemy->recoil_velocity =
+                Vector2Scale(direction, 120.0f);
+
+            // Time until next shot
+            enemy->shoot_timer =
+                enemy->shoot_speed;
+
+            // Finish shooting
+            if (enemy->shots == 0) {
+                enemy->shoot_timer = 0.0f;
+            }
+        }
+
+        // Enemy recoil
+        for (size_t i = 0; i < enemies.count; i++) {
+            Enemy *enemy =
+                list_get(Enemy, &enemies, i);
+
+            enemy->rect.x += enemy->recoil_velocity.x * dt;
+            enemy->rect.y += enemy->recoil_velocity.y * dt;
+
+            enemy->recoil_velocity =
+                Vector2Scale(enemy->recoil_velocity, 0.85f);
+            
+            enemy->rect.x = Clamp(
+                enemy->rect.x,
+                (float)enemy->rect.width,
+                WIDTH - (float)enemy->rect.width
+            );
+
+            enemy->rect.y = Clamp(
+                enemy->rect.y,
+                (float)enemy->rect.height,
+                HEIGHT - (float)enemy->rect.height
+            );
+        }
+
         UpdateAttacks(
             &attacks,
             &shakeTimer,
             &shakeIntensity
         );
 
+        for (size_t i = 0; i < enemies.count; i++) {
+            UpdateProjectiles(list_get(Enemy, &enemies, i));
+        }
+
+        // Screen shake
         UpdateScreenShake(
             &camera,
             &shakeTimer,
@@ -141,9 +259,13 @@ int main(void) {
         BeginMode2D(camera);
 
         DrawPlayer(player);
-        DrawBullets(&bullets);
+        DrawBullets(&playerBullets);
+
         DrawEnemies(&enemies, player);
         DrawAttacks(&attacks);
+        for (size_t i = 0; i < enemies.count; i++) {
+            DrawProjectiles(&list_get(Enemy, &enemies, i)->projs);
+        }
 
         DrawText(
             TextFormat(

@@ -48,9 +48,9 @@ void SineAttack1(List *attacks, Player p) {
 }
 
 void SineAttack2(List *attacks) {
-    Vector2 pos = (Vector2){GetRandomValue(0, WIDTH), GetRandomValue(0, HEIGHT)};
+    for (size_t i = 0; i < 8; i++) {
+        Vector2 pos = (Vector2){GetRandomValue(0, WIDTH), GetRandomValue(0, HEIGHT)};
 
-    for (size_t i = 0; i < 10; i++) {
         Attack attack = {
             .type = SINE,
             .damage = SINE_DAMAGE,

@@ -2,7 +2,7 @@
 #define ENEMY_H
 
 #include "game.h"
-#include "bullet.h"
+#include "player.h"
 #include "cimp.h"
 
 typedef enum {
@@ -10,21 +10,35 @@ typedef enum {
     SINE,
 } Type;
 
-typedef struct {
+typedef struct Enemy {
     float health;
     size_t speed;
     Rectangle rect;
 
     Type type;
 
+    List projs;
+    size_t shots;
+    size_t max_shots;
+
     float hurt_timer;
+
+    float charge_timer;
+    float charge_duration;
+
+    float shoot_timer;
+    float shoot_speed;
+
+    Vector2 shake_offset;
+    Vector2 recoil_velocity;
 
     float rotation;
     Color color;
     Vector2 eye_pos;
 } Enemy;
 
-void UpdateEnemies(List *enemies, List *bullets);
+void CheckEnemiesCollision(List *enemies, List *bullets);
+void ShakeEnemy(Enemy *enemy);
 void DrawEnemies(const List *enemies, Player p);
 
 Vector2 GetSpawnLocation(Player player);

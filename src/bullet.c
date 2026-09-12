@@ -1,7 +1,9 @@
 #include "bullet.h"
+#include "game.h"
 #include <math.h>
+#include <raymath.h>
 
-void Shoot(Player p, List *bullets, size_t count) {
+void PlayerShoot(Player p, List *bullets, size_t count) {
     Vector2 mouse = GetMousePosition();
 
     Vector2 direction = Vector2Subtract(mouse, p.pos);
@@ -30,7 +32,6 @@ void Shoot(Player p, List *bullets, size_t count) {
         list_push(bullets, bullet);
     }
 }
-
 
 void UpdateBullets(List *bullets) {
     float dt = GetFrameTime();

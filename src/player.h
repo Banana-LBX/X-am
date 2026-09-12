@@ -4,7 +4,7 @@
 #include "game.h"
 #include "cimp.h"
 
-typedef struct {
+typedef struct Player {
     float health;
     size_t speed;
     
@@ -22,6 +22,7 @@ void MovePlayer(Player *p);
 
 void UpdatePlayer(
     Player *p,
+    List *enemies,
     List *attacks,
     float *shakeTimer,
     float *shakeIntensity,

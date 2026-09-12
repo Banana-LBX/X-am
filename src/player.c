@@ -1,5 +1,7 @@
 #include "player.h"
+#include "projectile.h"
 #include "attack.h"
+#include "cimp.h"
 #include <raylib.h>
 
 void MovePlayer(Player *p) {
@@ -60,21 +62,15 @@ void MovePlayer(Player *p) {
     p->pos.y += p->velocity.y * dt;
 
     // Keep the player inside the screen
-    p->pos.x = Clamp(
-        p->pos.x,
-        (float)p->radius,
-        WIDTH - (float)p->radius
-    );
-
-    p->pos.y = Clamp(
-        p->pos.y,
-        (float)p->radius,
-        HEIGHT - (float)p->radius
-    );
+    if (p->pos.x > WIDTH)   p->pos.x = 0;
+    if (p->pos.x < 0)       p->pos.x = WIDTH;
+    if (p->pos.y > HEIGHT)  p->pos.y = 0;
+    if (p->pos.y < 0)       p->pos.y = HEIGHT;
 }
 
 void UpdatePlayer(
     Player *p,
+    List *enemies,
     List *attacks,
     float *shakeTimer,
     float *shakeIntensity,
@@ -160,6 +156,30 @@ void UpdatePlayer(
 
                 default:
                     break;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < enemies->count; i++) {
+        Enemy *enemy = list_get(Enemy, enemies, i);
+
+        for (size_t j = 0; j < enemy->projs.count; j++) {
+            Projectile *proj = list_get(Projectile, &enemy->projs, j);
+
+            if (CheckCollisionCircles(
+                p->pos,
+                p->radius,
+                proj->pos,
+                proj->radius
+            )) {
+                p->health -= (float)proj->damage;
+
+                p->hurt_timer = INVINCI_TIME;
+
+                *shakeTimer = 0.20f;
+                *shakeIntensity = 50.0f;
+
+                *hitTimer = 1.5f;
             }
         }
     }
